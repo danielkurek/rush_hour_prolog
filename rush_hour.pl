@@ -34,7 +34,7 @@ nahrad_prvni(_, _, [], []) :- !.
 nahrad_prvni(P, N, [P|L], [N|L]) :- !.
 nahrad_prvni(P, N, [X|L], [X|NL]) :- X \= P, nahrad_prvni(P, N, L, NL).
 
-% dolu(+P, ?LL, ?NL) :- posune vsechny symboly P o 1 pole dolu (musi byt volne misto na posunuti), vysledek je v seznamu NL
+% dolu(+P, +LL, -NL) :- posune vsechny symboly P o 1 pole dolu (musi byt volne misto na posunuti), vysledek je v seznamu NL
 % LL a NL - jeden musi byt vstup, druhy vystup
 dolu(P, [R|L], [NR|NL]) :- (member(P, R) -> nahrad_prvni(P, o, R, NR), nth0(I, R, P), !, dolu_(P, L, NL, I); dolu(P, L, NL)).
 
@@ -42,10 +42,13 @@ dolu(P, [R|L], [NR|NL]) :- (member(P, R) -> nahrad_prvni(P, o, R, NR), nth0(I, R
 nahrad_prvek_na(0, P, [S|L], [P|L]) :- !, S = o.
 nahrad_prvek_na(I, P, [X|L], [X|NL]) :- NI is I - 1, !, NI >= 0, nahrad_prvek_na(NI, P, L, NL).
 
+% dolu_(+P, +L, -NL, +I) :- pomocny predikat pro dolu/3, presune vsechny krome prvniho prvku
 dolu_(P, [R|L], [NR|NL], I) :- !, (member(P, R) -> R = NR, dolu_(P, L, NL, I); nahrad_prvek_na(I, P, R, NR), L = NL).
 
+% nahoru(+P, +L, -NL) :- posune vsechny symboly P o 1 pole nahoru, vysledny seznam je NL
 nahoru(P, [R1,R2|L], [NR1,NR2|NL]) :- member(P, R2), nth0(I, R2, P), !, nahrad_prvek_na(I, P, R1, NR1), R2 = NR2, nahoru_(P, L, NL, I).
 
+% nahoru(+P, +L, -NL, +I) :- pomocny predikat pro nahoru/3, presune vsechny krome prvniho prvku
 nahoru_(P, [R1,R2|L], [NR1,NR2|NL], I) :- !, (member(P, R2) -> R1 = NR1, nahoru_(P, [R2|L], [NR2|NL], I); nahrad_prvek_na(I, P, NR1, R1), R2 = NR2, L = NL).
 nahoru_(P, [R], [NR], I) :- !, nahrad_prvek_na(I, P, NR, R).
 
@@ -77,13 +80,10 @@ dozadu(P, [R], [NR]) :- !, pocet(P, R, V), V > 1, doleva(P, [R], [NR]).
 % posledni_dva(?P, +L) :- prvek P je na poslednich dvou pozicich seznamu L
 posledni_dva(P, L) :- append(_, [P, P], L), !.
 
+% cil(+M) :- kontrola, jestli M je cilovy stav
 cil([_, _, R3|_]) :- posledni_dva(x, R3).
 
-% cesta(H, S, T, P) :- najde cestu
-%   H je jeden krok
-%   S je aktualni stav hraciho pole 
-%   T kontroluje cilovy stav
-%   P je posloupnost tahu
+% cesta(+KROK, +START, +CIL, +AUTA, -CESTA) :- najde cestu z START do cile CIL/1 pomoci kroku KROK, ktere lze aplikovat na auta ze seznamu AUTA, vysledna cesta je v CESTA
 cesta(KROK, START, CIL, AUTA, CESTA) :- cesta(KROK, START, CIL, [START], AUTA, CESTA).
 cesta(_, START, CIL, _, _, []) :- call(CIL, START).
 cesta(KROK, START, CIL, MEM, AUTA, [AKCE|CESTA]) :- 
@@ -94,21 +94,23 @@ cesta(KROK, START, CIL, MEM, AUTA, [AKCE|CESTA]) :-
         cesta(KROK, NSTAV, CIL, [NSTAV|MEM], AUTA, CESTA)
     ).
 
+% cesta_iter(+N, +KROK, +START, +CIL, +AUTA, -CESTA) :- vola hledani cesty pro delky 1 az N, po prvni najite ceste uz nic nehleda
 cesta_iter(N, KROK, START, CIL, AUTA, CESTA) :- between(1, N, K), length(CESTA, K), cesta(KROK, START, CIL, AUTA, CESTA), !.
 
 rush_hour_krok(S, W, T, A, AUTA) :- rush_hour_krok_(S, W, T, A, AUTA), \+ call(T, S).
 rush_hour_krok_(S, W, _, A, AUTA) :- member(X, AUTA), dopredu(X, S, W), A=[X,f].
 rush_hour_krok_(S, W, _, A, AUTA) :- member(X, AUTA), dozadu(X, S, W), A=[X,b].
 
+% rush_hour(+START, +CIL, +AUTA, -CESTA) :- najde nejkratsi cestu z START ke splneni cile CIL/1, muze pohybovat auty ze seznamu AUTA, vysledna cesta je v CESTA
 rush_hour(START, CIL, _, []) :- call(CIL, START), !.
 rush_hour(START, CIL, AUTA, CESTA) :- cesta_iter(100, rush_hour_krok, START, CIL, AUTA, CESTA).
+% rush_hour(+START, +AUTA, -CESTA) :- najde nejkratsi cestu z START ke splneni zakldniho cile, muze pohybovat auty ze seznamu AUTA, vysledna cesta je v CESTA
 rush_hour(START, AUTA, CESTA) :- rush_hour(START, cil, AUTA, CESTA).
 
-% start with final state, populate cars on free positions, work backwards, test minimal number of steps to solve
-% difficulty is determined by the minimal number of steps to complete the puzzle
-
+% matice_(+N, -V) :- vytvori radek matice delky N
 matice_(N, [X]) :- length(X, N).
 matice_(N, [X|V]) :- length(X, N), matice_(N, V).
+% matice(+M, +N, -V) :- vytvori prazdnou matici M x N, vysledek je V
 matice(M, N, V) :- length(V, M), matice_(N, V).
 
 % generace(+M, +N, +R, +A, -V) :- vygeneruje rozlozeni aut ze seznamu A na mape M*N, kde nejkratsi reseni je R kroku, vysledna mapa je V
@@ -135,6 +137,7 @@ vypln_prazdne_([], _) :- !.
 vypln_prazdne_([X|R], P) :- nonvar(X), vypln_prazdne_(R, P).
 vypln_prazdne_([X|R], P) :- var(X), X=P, vypln_prazdne_(R, P).
 
+% vypis_matici(+M) :- vypise matici M, po radach
 vypis_matici([]).
 vypis_matici([R|M]) :- write('\n'), write(R), vypis_matici(M).
 
