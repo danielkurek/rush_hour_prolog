@@ -424,8 +424,21 @@ test("rush_hour - jednoduche") :-
     rush_hour([[o,o,o,o,o,o],
                [o,o,o,o,o,o],
                [o,x,x,o,o,o],
-               [a,o,o,o,o,o],
                [o,o,o,o,o,o],
-               [o,o,o,o,o,o]], cil, P, [x]),
+               [o,o,o,o,o,o],
+               [o,o,o,o,o,o]], [x], P),
                P = [[x,f],[x,f],[x,f]].
+test("rush_hour - spatne", [fail]) :-
+    rush_hour([[o,o,o,o,o,o],
+               [o,o,o,o,o,o],
+               [o,x,x,o,a,a],
+               [o,o,o,o,o,o],
+               [o,o,o,o,o,o],
+               [o,o,o,o,o,o]], [a,x], _).
+test("rush_hour - spatne slozite", [fail]) :-
+    rush_hour([[o,o,e,o,a],
+               [o,o,e,o,a],
+               [o,x,x,o,a],
+               [o,o,d,b,b],
+               [o,o,d,c,c]], [a,b,c,d,e,x], _).
 :- end_tests(rush_hour_test).

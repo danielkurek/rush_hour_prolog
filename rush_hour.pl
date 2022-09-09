@@ -1,4 +1,4 @@
-:- module(rush_hour, [pocet/3, dopredu/3, dozadu/3, doprava/3, nahrad_prvni/4, dolu/3, nahrad_prvek_na/4, posledni_dva/2, rush_hour/4, cil/1]).
+:- module(rush_hour, [pocet/3, dopredu/3, dozadu/3, doprava/3, nahrad_prvni/4, dolu/3, nahrad_prvek_na/4, posledni_dva/2, rush_hour/4, rush_hour/3, cil/1]).
 
 % 6x6 pole
 % 12 aut - 2 policka
@@ -9,20 +9,7 @@
 %   - vyjezd je na tretim radku vpravo
 % vsechny auta a nakladaky nemusi byt na hracim poli
 
-% Reprezentace (podle https://www.thinkfun.com/internal/rush-hour-challenge-generator/ ) :
-% -OOOAA--BPPP--BXXC-----CQQQRRR------ 
-% Mapa:
-% -OOOAA
-% --BPPP
-% --BXXC
-% -----C
-% QQQRRR
-% ------
-
 % volne misto = o
-
-% naprogramovat solver - napred 6*6 pote m*n
-% pote udelat generator, podle poctu kroku solveru
 
 % pocet(+S, +L, ?V) :- pocet symbolu S v listu L je V
 pocet(_, [], 0) :- !.
@@ -97,25 +84,32 @@ cil([_, _, R3|_]) :- posledni_dva(x, R3).
 %   S je aktualni stav hraciho pole 
 %   T kontroluje cilovy stav
 %   P je posloupnost tahu
-cesta(H, S, T, P, AUTA) :- cesta(H, S, T, [S], P, AUTA).
-cesta(_, S, _, _, [], _) :- cil(S).
-cesta(H, S, T, V, [A|P], AUTA) :- call(H, S, W, T, A, AUTA), \+ member(W, V), ( cil(W) -> true; cesta(H, W, T, [S|V], P, AUTA)).
+cesta(KROK, START, CIL, AUTA, CESTA) :- cesta(KROK, START, CIL, [START], AUTA, CESTA).
+cesta(_, START, CIL, _, _, []) :- call(CIL, START).
+cesta(KROK, START, CIL, MEM, AUTA, [AKCE|CESTA]) :- 
+    call(KROK, START, NSTAV, CIL, AKCE, AUTA), 
+    \+ member(NSTAV, MEM), 
+    ( call(CIL, NSTAV) -> 
+        true; 
+        cesta(KROK, NSTAV, CIL, [NSTAV|MEM], AUTA, CESTA)
+    ).
 
-cesta_iter(N, H, S, T, P, AUTA) :- between(1, N, K), length(P, K), cesta(H, S, T, P, AUTA), !.
+cesta_iter(N, KROK, START, CIL, AUTA, CESTA) :- between(1, N, K), length(CESTA, K), cesta(KROK, START, CIL, AUTA, CESTA), !.
 
 rush_hour_krok(S, W, T, A, AUTA) :- rush_hour_krok_(S, W, T, A, AUTA), \+ call(T, S).
 rush_hour_krok_(S, W, _, A, AUTA) :- member(X, AUTA), dopredu(X, S, W), A=[X,f].
 rush_hour_krok_(S, W, _, A, AUTA) :- member(X, AUTA), dozadu(X, S, W), A=[X,b].
 
-rush_hour(S, T, [], _) :- call(T, S), !.
-rush_hour(S, T, P, AUTA) :- cesta_iter(100, rush_hour_krok, S, T, P, AUTA).
+rush_hour(START, CIL, _, []) :- call(CIL, START), !.
+rush_hour(START, CIL, AUTA, CESTA) :- cesta_iter(100, rush_hour_krok, START, CIL, AUTA, CESTA).
+rush_hour(START, AUTA, CESTA) :- rush_hour(START, cil, AUTA, CESTA).
 
 % start with final state, populate cars on free positions, work backwards, test minimal number of steps to solve
 % difficulty is determined by the minimal number of steps to complete the puzzle
 
-matice_(M, [X]) :- length(X, M).
-matice_(M, [X|V]) :- length(X, M), matice_(M, V).
-matice(M, N, V) :- length(V, N), matice_(M, V).
+matice_(N, [X]) :- length(X, N).
+matice_(N, [X|V]) :- length(X, N), matice_(N, V).
+matice(M, N, V) :- length(V, M), matice_(N, V).
 
 % generace(+M, +N, +R, +A, -V) :- vygeneruje rozlozeni aut ze seznamu A na mape M*N, kde nejkratsi reseni je R kroku, vysledna mapa je V
 generace(M, N, R, A, V) :- matice(M, N, V), !, generace_(R, A, [], V).
@@ -123,7 +117,16 @@ generace_(R, [X|A], Z, MAPA) :- poloz_v([X,X], MAPA), generace_(R, A, [X|Z], MAP
 generace_(R, [X|A], Z, MAPA) :- poloz_v([X,X,X], MAPA), generace_(R, A, [X|Z], MAPA).
 generace_(R, [X|A], Z, MAPA) :- poloz_h([X,X], MAPA), generace_(R, A, [X|Z], MAPA).
 generace_(R, [X|A], Z, MAPA) :- poloz_h([X,X,X], MAPA), generace_(R, A, [X|Z], MAPA).
-generace_(R, [], Z, MAPA) :- MAPA = [_,_,R3|_], poloz_h_([x,x],R3), vypln_prazdne(MAPA, o), cesta_iter(R, rush_hour_krok, MAPA, cil, P, [x|Z]), length(P, R), write(P).
+generace_(R, [], Z, MAPA) :- MAPA = [_,_,R3|_], poloz_h_([x,x],R3), 
+    vypln_prazdne(MAPA, o), MAXR is R + (R // 2), cesta_iter(MAXR, rush_hour_krok, MAPA, cil, [x|Z], P), length(P, X), X >= R, write(P), vypis_matici(MAPA).
+
+generace2(M, N, R, A2, A3, V) :- matice(M, N, V), !, generace2_(R, A2, A3, [], V).
+generace2_(R, [X|A2], A3, Z, MAPA) :- poloz_v([X,X], MAPA), generace2_(R, A2, A3, [X|Z], MAPA).
+generace2_(R, A2, [X|A3], Z, MAPA) :- poloz_v([X,X,X], MAPA), generace2_(R, A2, A3, [X|Z], MAPA).
+generace2_(R, [X|A2], A3, Z, MAPA) :- poloz_h([X,X], MAPA), generace2_(R, A2, A3, [X|Z], MAPA).
+generace2_(R, A2, [X|A3], Z, MAPA) :- poloz_h([X,X,X], MAPA), generace2_(R, A2, A3, [X|Z], MAPA).
+generace2_(R, [], [], Z, MAPA) :- MAPA = [_,_,R3|_], poloz_h_([x,x],R3), 
+    vypln_prazdne(MAPA, o), MAXR is R + (R // 2), cesta_iter(MAXR, rush_hour_krok, MAPA, cil, [x|Z], P), length(P, X), X >= R, write(P), vypis_matici(MAPA).
 
 % vypln_prazdne(L, P) :- vsechny volne termy unifikuje s P
 vypln_prazdne([], _) :- !.
@@ -132,8 +135,9 @@ vypln_prazdne_([], _) :- !.
 vypln_prazdne_([X|R], P) :- nonvar(X), vypln_prazdne_(R, P).
 vypln_prazdne_([X|R], P) :- var(X), X=P, vypln_prazdne_(R, P).
 
-seznam_plny([]).
-seznam_plny([X|L]) :- nonvar(X), seznam_plny(L).
+vypis_matici([]).
+vypis_matici([R|M]) :- write('\n'), write(R), vypis_matici(M).
+
 
 % poloz_h(+X, +MAPA) :- polozi auto X na mapu MAPA horizontalne (unifikuje auto s mapou), X je seznam symbolu auta (delka seznamu urcuje delku auta)
 poloz_h(X, [R|_]) :- poloz_h_(X, R).
